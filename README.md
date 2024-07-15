@@ -1,57 +1,87 @@
-### Supertext
+# Supertext
 
-#### Purpose
-The script creates a tree structure of web links, allowing users to selectively explore and exclude links from a given starting URL. It includes functionality to resume processing from a saved state.
+Supertext is a Node.js script that creates a tree structure of web links, allowing users to selectively explore and exclude links from a given starting URL. It includes functionality to resume processing from a saved state and saves the concatenated content of the processed links into a readable text file.
 
-#### Main Components
-1. **Link Fetching and Parsing**: Uses `axios` to fetch web pages and `jsdom` to parse HTML content.
-2. **URL Resolution**: Converts relative URLs to absolute URLs using the `URL` constructor.
-3. **Interactive Link Selection**: Users interactively select which links to exclude or preserve.
-4. **Tree Structure Building**: Constructs a nested structure of links.
-5. **Concat HTMLs**: Make a flatten text of the entire tree doc.
+## Features
 
-#### Key Features
-1. **Link Extraction**: Fetches web pages and extracts links while handling various character encodings (`UTF-8`, `EUC-JP`, `SHIFT_JIS`, `ISO-2022-JP`).
-2. **URL Resolution**: Resolves relative URLs to absolute URLs.
-3. **Interactive Selection**:
-   - Users can exclude links by entering their numbers or range of numbers.
-   - Users can preserve links by prefixing with "p" (e.g., `p1` or `p1-5`).
-   - Users can move to the next level of links or finish processing.
+1. **Link Extraction**: Fetches web pages and extracts links, handling dynamic content with Puppeteer.
+2. **Domain-specific Selectors**: Uses specific selectors for `paper.dropbox.com` and `scrapbox.io` to ensure accurate content extraction.
+3. **Interactive Link Selection**: Users can interactively select which links to exclude or preserve.
 4. **Resuming**: Supports resuming the process from a saved state using selections saved in `removal_selections.txt`.
+5. **Concatenated Content**: Saves the final concatenated content of all processed links into `result.txt`.
 
-#### User Interaction
-- **Input**:
-  - `next`: To move to the next level of links.
-  - `done`: To finish processing.
-  - Number or range (e.g., `1`, `1-5`): To exclude specific links.
-  - Preserve prefix (`p`): To preserve specific links (e.g., `p1`, `p1-5`).
+## Installation
 
-#### Output
-- **Concatenated Content**: Saves the final concatenated content of all processed links into `result.txt`.
-- **Saved Selections**: Saves user selections into `removal_selections.txt` for resuming purposes.
+1. Clone the repository:
 
-#### Technical Details
-- Implemented in Node.js.
-- Uses `axios` for web requests.
-- Uses `iconv-lite` for handling various character encodings.
-- Uses `jsdom` for HTML parsing.
-- Supports both initial processing and resuming from a saved state.
+    ```sh
+    git clone git@github.com:shogochiai/supertext.git
+    cd supertext
+    ```
 
-#### Limitations
-- May not handle dynamically loaded content.
-- Limited to a maximum number of links per page (configurable).
-- May encounter issues with websites that have strict anti-scraping measures.
+2. Install dependencies:
 
-### Example Usage
+    ```sh
+    npm install
+    ```
+
+3. Make sure you have Node.js and npm installed.
+
+## Usage
+
 1. **Initial Run**:
-   ```sh
-   node script.js
-   ```
-   - Enter the root URL when prompted.
-   - Interact to exclude or preserve links, move to next level, or finish processing.
+
+    ```sh
+    node supertext.js
+    ```
+
+    - Enter the root URL when prompted.
+    - Interact to exclude or preserve links, move to the next level, or finish processing.
 
 2. **Resume**:
-   ```sh
-   node script.js resume
-   ```
-   - Automatically applies saved selections from `removal_selections.txt` and resumes processing.
+
+    ```sh
+    node supertext.js resume
+    ```
+
+    - Automatically applies saved selections from `removal_selections.txt` and resumes processing.
+
+## Interactive Commands
+
+- **next**: Move to the next level of links.
+- **done**: Finish processing.
+- **Exclude links**: Enter the numbers of links to exclude (space-separated, use "-" for range).
+- **Preserve links**: Enter numbers prefixed with "p" (e.g., `p1`, `p1-5`).
+
+## Files
+
+- `root_url.txt`: Stores the root URL for processing.
+- `removal_selections.txt`: Stores user selections for excluding or preserving links, used for resuming.
+- `result.txt`: Contains the final concatenated content of all processed links.
+
+## Example
+
+```sh
+$ node supertext.js
+Loaded root URL from root_url.txt: https://paper.dropbox.com/doc/Example--CS9RE~BK8eeyOTv0w6kWlu9YAg
+Fetching https://paper.dropbox.com/doc/Example--CS9RE~BK8eeyOTv0w6kWlu9YAg
+Remaining links:
+1. Example Link 1
+   URL: https://example.com/1
+
+2. Example Link 2
+   URL: https://example.com/2
+
+Enter the numbers of links to exclude (space-separated, use "-" for range), preserve (prefix with "p", e.g., "p1"), "next" to move to the next level, or "done" to finish:
+```
+
+## Technical Details
+
+- **Puppeteer**: Used for fetching and parsing links from dynamically loaded content.
+- **File System**: Saves and loads selections and root URL for resuming.
+- **Interactive CLI**: Uses readline for user interaction.
+
+## License
+
+This project is licensed under the MIT License. See the `LICENSE` file for details.
+

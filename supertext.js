@@ -5,6 +5,7 @@ const path = require('path');
 
 const DEBUG = false;
 const MAX_LINKS = 2000;
+const CONCURRENCY_LIMIT = 10; // Adjust the concurrency limit as needed
 const ROOT_URL_FILE = 'root_url.txt';
 const SELECTION_FILE = 'removal_selections.txt';
 
@@ -12,6 +13,12 @@ const SELECTION_FILE = 'removal_selections.txt';
 const urlCache = new Map();
 const htmlCache = new Map();
 const shownLinks = new Set();
+
+let pLimit;
+
+async function loadPLimit() {
+    pLimit = (await import('p-limit')).default;
+}
 
 function debug(message) {
     if (DEBUG) {
@@ -88,11 +95,15 @@ function resolveUrl(baseUrl, href) {
 }
 
 async function fetchAllLinks(urls) {
+    const limit = pLimit(CONCURRENCY_LIMIT);
+    const fetchPromises = urls.map(url => limit(() => fetchAndParseLinks(url)));
+    const results = await Promise.all(fetchPromises);
+
     let allLinks = [];
-    for (const url of urls) {
-        const links = await fetchAndParseLinks(url);
+    for (let i = 0; i < results.length; i++) {
+        const links = results[i];
         if (!links) continue;
-        const resolvedLinks = links.map(([href, text]) => [resolveUrl(url, href), text]).filter(([resolvedUrl]) => resolvedUrl);
+        const resolvedLinks = links.map(([href, text]) => [resolveUrl(urls[i], href), text]).filter(([resolvedUrl]) => resolvedUrl);
         allLinks = [...allLinks, ...resolvedLinks];
     }
     return [...new Set(allLinks.map(JSON.stringify))].map(JSON.parse).slice(0, MAX_LINKS);
@@ -100,6 +111,7 @@ async function fetchAllLinks(urls) {
 
 async function processLinks(urls, level, resume = false, savedSelections = []) {
     let allLinks = await fetchAllLinks(urls);
+    allLinks.sort((a, b) => a[0].localeCompare(b[0])); // Sort links to make IDs consistent
     let preservedLinks = new Set();
 
     while (true) {
@@ -192,9 +204,9 @@ function parseInput(input, length) {
     for (const part of parts) {
         if (part.startsWith('p')) {
             const range = part.slice(1);
-            addRangeToSet(range, length, preserveIndices);
+            addRangeToSet(range, length, preserveIndices, true);
         } else if (part.includes('-')) {
-            addRangeToSet(part, length, excludeIndices);
+            addRangeToSet(part, length, excludeIndices, false);
         } else {
             const num = Number(part);
             if (!isNaN(num) && num > 0 && num <= length) {
@@ -205,10 +217,10 @@ function parseInput(input, length) {
     return { excludeIndices, preserveIndices };
 }
 
-function addRangeToSet(range, length, set) {
+function addRangeToSet(range, length, set, isPreserve) {
     let [startStr, endStr] = range.split('-');
     let start = startStr ? Number(startStr) : 1;
-    let end = endStr ? Number(endStr) : length;
+    let end = endStr ? Number(endStr) : (isPreserve ? length : start);
     if (start > end) [start, end] = [end, start];
     if (!isNaN(start) && !isNaN(end) && start > 0 && end <= length) {
         for (let i = Math.max(start, 1); i <= Math.min(end, length); i++) {
@@ -286,6 +298,8 @@ function prompt(question) {
 }
 
 async function main() {
+    await loadPLimit(); // Load p-limit before using it
+
     const rootUrl = await loadRootUrl();
     const initialUrls = [rootUrl];
     const savedSelections = await loadSavedSelections();
