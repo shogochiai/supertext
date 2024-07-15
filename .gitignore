@@ -1,0 +1,5 @@
+.DS_Store
+node_modules
+result.txt
+removal_selections.txt
+root_url.txt
