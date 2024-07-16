@@ -17,6 +17,7 @@ const shownLinks = new Set();
 const preservedLinks = new Map();
 
 let pLimit;
+let applyExecuted = false;
 
 async function loadPLimit() {
     pLimit = (await import('p-limit')).default;
@@ -119,88 +120,56 @@ async function processLinks(urls, level, resume = false, savedSelections = []) {
         echoErr('Remaining links:');
         displayLinks(allLinks);
 
-        let input;
-        if (resume && savedSelections[level - 1]) {
+        let input = await prompt('Enter the numbers of links to exclude (space-separated, use "-" for range), preserve (prefix with "p", e.g., "p1"), "next" to move to the next level, "apply" to apply past choices, or "done" to finish: ');
+
+        if (input === 'next') {
+            if (allLinks.length === 0 && preservedLinks.size === 0) {
+                echoErr('No links to process. Exiting.');
+                break;
+            }
+
+            const nextUrls = [];
+            for (let i = 0; i < allLinks.length; i++) {
+                if (!preservedLinks.has(i + 1)) {
+                    nextUrls.push(allLinks[i][0]);
+                }
+            }
+            if (nextUrls.length === 0 && preservedLinks.size > 0) {
+                preservedLinks.forEach((value) => {
+                    nextUrls.push(value[0]);
+                });
+            }
+            if (nextUrls.length === 0) {
+                echoErr('No links to process. Exiting.');
+                break;
+            }
+            await processLinks(nextUrls, level + 1, resume, savedSelections);
+            break;
+        } else if (input === 'done') {
+            return;
+        } else if (input === 'apply') {
+            if (applyExecuted) {
+                echoErr('Cannot apply more than once.');
+                continue;
+            }
             const selections = savedSelections[level - 1];
             for (const selection of selections) {
                 allLinks = applySelection(selection, allLinks);
             }
-            resume = false;  // Disable resume after applying saved selections
+            applyExecuted = true;
+            echoErr('Past Choice Applied.');
+            displayLinks(allLinks);
         } else {
-            input = await prompt('Enter the numbers of links to exclude (space-separated, use "-" for range), preserve (prefix with "p", e.g., "p1"), "next" to move to the next level, or "done" to finish: ');
+            allLinks = applySelection(input, allLinks);
+            if (!resume || !savedSelections[level - 1]) saveSelection(input, level);
 
-            if (input === 'next') {
-                if (allLinks.length === 0 && preservedLinks.size === 0) {
-                    echoErr('No links to process. Exiting.');
-                    break;
-                }
-
-                const nextUrls = [];
-                for (let i = 0; i < allLinks.length; i++) {
-                    if (!preservedLinks.has(i + 1)) {
-                        nextUrls.push(allLinks[i][0]);
-                    }
-                }
-                if (nextUrls.length === 0 && preservedLinks.size > 0) {
-                    preservedLinks.forEach((value, key) => {
-                        nextUrls.push(value[0]);
-                    });
-                }
-                if (nextUrls.length === 0) {
-                    echoErr('No links to process. Exiting.');
-                    break;
-                }
-                await processLinks(nextUrls, level + 1, resume, savedSelections);
-                break;
-            } else if (input === 'done') {
-                return;
-            } else {
-                allLinks = applySelection(input, allLinks);
-                if (!resume || !savedSelections[level - 1]) saveSelection(input, level);
-
-                echoErr('Remaining links after exclusion:');
-                displayLinks(allLinks);
-            }
+            echoErr('Remaining links after exclusion:');
+            displayLinks(allLinks);
         }
 
         // Check if there are more saved selections for the current level
         if (!resume && savedSelections[level] && savedSelections[level].length > 0) {
             continue;
-        } else {
-            input = await prompt('Enter the numbers of links to exclude (space-separated, use "-" for range), preserve (prefix with "p", e.g., "p1"), "next" to move to the next level, or "done" to finish: ');
-
-            if (input === 'next') {
-                if (allLinks.length === 0 && preservedLinks.size === 0) {
-                    echoErr('No links to process. Exiting.');
-                    break;
-                }
-
-                const nextUrls = [];
-                for (let i = 0; i < allLinks.length; i++) {
-                    if (!preservedLinks.has(i + 1)) {
-                        nextUrls.push(allLinks[i][0]);
-                    }
-                }
-                if (nextUrls.length === 0 && preservedLinks.size > 0) {
-                    preservedLinks.forEach((value, key) => {
-                        nextUrls.push(value[0]);
-                    });
-                }
-                if (nextUrls.length === 0) {
-                    echoErr('No links to process. Exiting.');
-                    break;
-                }
-                await processLinks(nextUrls, level + 1, resume, savedSelections);
-                break;
-            } else if (input === 'done') {
-                return;
-            } else {
-                allLinks = applySelection(input, allLinks);
-                saveSelection(input, level);
-
-                echoErr('Remaining links after exclusion:');
-                displayLinks(allLinks);
-            }
         }
     }
 }
@@ -213,7 +182,9 @@ function applySelection(input, links) {
         }
     });
 
-    return links.filter((_, index) => !excludeIndices.has(index + 1));
+    return links
+        .filter((_, index) => !excludeIndices.has(index + 1))
+        .filter((_, index) => !preserveIndices.has(index + 1));
 }
 
 function parseInput(input, length) {
@@ -263,6 +234,7 @@ function addRangeToSet(range, length, set) {
         }
     }
 }
+ 
 
 function displayLinks(links) {
     links.forEach(([url, text], index) => {
@@ -332,6 +304,14 @@ function prompt(question) {
     }));
 }
 
+function generateScenarioLinks(numLinks) {
+    const scenarioLinks = [];
+    for (let i = 1; i <= numLinks; i++) {
+        scenarioLinks.push([`url${i}`, `link ${i}`]);
+    }
+    return scenarioLinks;
+}
+
 async function runTests() {
     // Helper function to test parseInput and addRangeToSet
     function testParseInput(input, length, expectedExcludes, expectedPreserves) {
@@ -365,7 +345,47 @@ async function runTests() {
     });
 
     console.log('All tests passed.');
+
+    // Scenario test
+    console.log('Running scenario test...');
+    let scenarioLinks = generateScenarioLinks(1000);  // Generate 1000 links
+
+    // Simulate applying initial levels
+    const savedSelections = [
+        '658-', '608-', '524-', '453-', '292-', '269-', 'p249-', '186-', 'p122', '122-'
+    ];
+
+    for (const selection of savedSelections) {
+        let scenarioLinksBefore1 = scenarioLinks.length;
+        console.log(`Applying selection: ${selection}`);
+        scenarioLinks = applySelection(selection, scenarioLinks);
+        console.log(`Scenario links before: ${scenarioLinksBefore1}, after: ${scenarioLinks.length}`);
+        assert(scenarioLinks.length < scenarioLinksBefore1, "scenarioLinks must be reduced.");
+    }
+
+    // Now try preservation before the final apply
+    let input = 'p10';
+    let scenarioLinksBefore2 = scenarioLinks.length;
+    let preservedLinksBefore1 = preservedLinks.size;
+    console.log(`Applying preservation: ${input}`);
+    scenarioLinks = applySelection(input, scenarioLinks);
+    console.log(`Scenario links before: ${scenarioLinksBefore2}, after: ${scenarioLinks.length}`);
+    console.log(`Preserved links before: ${preservedLinksBefore1}, after: ${preservedLinks.size}`);
+    assert(scenarioLinks.length < scenarioLinksBefore2, "scenarioLinks must be reduced.");
+    assert(preservedLinks.size > preservedLinksBefore1, "preservedLinks must be increased.");
+
+    // Now apply the final selection to clear links
+    input = '1-';
+    let scenarioLinksBefore3 = scenarioLinks.length;
+    console.log(`Applying final selection: ${input}`);
+    scenarioLinks = applySelection(input, scenarioLinks);
+    console.log(`Scenario links before: ${scenarioLinksBefore3}, after: ${scenarioLinks.length}`);
+    assert(scenarioLinks.length < scenarioLinksBefore3, "scenarioLinks must be reduced.");
+
+    console.log("All scenario test passed.");
 }
+
+
 
 async function main() {
     await loadPLimit(); // Load p-limit before using it
@@ -380,12 +400,7 @@ async function main() {
     const initialUrls = [rootUrl];
     const savedSelections = await loadSavedSelections();
 
-    if (args[0] === 'resume') {
-        echoErr('Resuming with saved selections...');
-        await processLinks(initialUrls, 1, true, savedSelections);
-    } else {
-        await processLinks(initialUrls, 1);
-    }
+    await processLinks(initialUrls, 1, true, savedSelections);
 
     await saveConcatenatedContent();
     echoErr('Tree building complete.');
