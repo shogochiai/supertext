@@ -68,7 +68,7 @@ Level 7: 1-
 1. Clone the repository:
    ```sh
    git clone https://github.com/shogochiai/supertext.git
-   cd web-link-scraper
+   cd supertext
    ```
 
 2. Install dependencies:
@@ -80,7 +80,7 @@ Level 7: 1-
 
 1. Run the script:
    ```sh
-   node index.js
+   node supertext.js
    ```
 
 2. Enter the root URL when prompted, or load the saved root URL from `root_url.txt`.
@@ -98,7 +98,7 @@ Level 7: 1-
 
 Run the included test suite to verify core functionalities:
 ```sh
-node index.js test
+node supertext.js test
 ```
 
 ## Files
